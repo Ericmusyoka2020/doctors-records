@@ -1,0 +1,819 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>MediFile — Digital Patient Records</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    @media print {
+      body * { visibility: hidden; }
+      #printArea, #printArea * { visibility: visible; }
+      #printArea { position: absolute; left: 0; top: 0; width: 100%; background: white; padding: 16px; }
+    }
+  </style>
+</head>
+<body class="bg-slate-50 text-slate-800 min-h-screen flex flex-col">
+
+  <!-- Toast -->
+  <div id="toast" class="fixed bottom-4 right-4 z-50 hidden max-w-sm rounded-xl px-4 py-3 text-sm font-medium text-white shadow-lg"></div>
+
+  <!-- Password-Only Lock Screen -->
+  <div id="authScreen" class="fixed inset-0 z-40 flex items-center justify-center bg-slate-900/95 p-4">
+    <div class="w-full max-w-sm rounded-2xl bg-white p-6 shadow-2xl">
+      <div class="mb-5 flex items-center gap-3">
+        <div class="flex h-11 w-11 items-center justify-center rounded-xl bg-teal-600 text-white font-bold text-xl">M+</div>
+        <div>
+          <h1 class="text-xl font-bold text-slate-900">MediFile Records</h1>
+          <p class="text-xs text-slate-500">Text-Based Patient File System</p>
+        </div>
+      </div>
+
+      <form id="authForm" class="space-y-4">
+        <div>
+          <label class="block text-xs font-semibold uppercase tracking-wide text-slate-600 mb-1">Password</label>
+          <input id="pinInput" type="password" required autofocus placeholder="Enter clinic password"
+            class="w-full rounded-xl border border-slate-300 px-3.5 py-2.5 text-sm focus:border-teal-600 focus:outline-none" />
+        </div>
+        <button id="unlockBtn" type="submit"
+          class="w-full rounded-xl bg-teal-600 py-3 text-sm font-semibold text-white hover:bg-teal-700 transition">
+          Open Records
+        </button>
+      </form>
+    </div>
+  </div>
+
+  <!-- Top Bar -->
+  <header class="sticky top-0 z-30 border-b border-slate-200 bg-white/95 backdrop-blur">
+    <div class="mx-auto flex max-w-6xl items-center justify-between gap-2 px-3 sm:px-6 py-3">
+      <button onclick="showDashboard()" class="flex items-center gap-2 text-left">
+        <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-teal-600 font-bold text-white">M+</span>
+        <div>
+          <span class="block text-sm sm:text-base font-bold leading-tight text-slate-900">MediFile</span>
+          <span class="hidden sm:block text-[11px] text-slate-500">Digital Patient Record Book</span>
+        </div>
+      </button>
+
+      <div class="flex items-center gap-2">
+        <button onclick="openPatientModal()"
+          class="rounded-xl bg-teal-600 px-3 sm:px-4 py-2 text-xs sm:text-sm font-semibold text-white hover:bg-teal-700">
+          + New Patient
+        </button>
+        <button onclick="lockApp()"
+          class="rounded-xl border border-slate-200 px-3 py-2 text-xs font-medium text-slate-600 hover:bg-slate-100">
+          Lock
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Content -->
+  <main class="mx-auto w-full max-w-6xl flex-1 px-3 sm:px-6 py-5">
+
+    <!-- DASHBOARD VIEW -->
+    <section id="dashboardView" class="space-y-5">
+      <div class="grid grid-cols-2 sm:grid-cols-3 gap-3">
+        <div class="rounded-2xl border border-slate-200 bg-white p-4">
+          <p class="text-xs font-medium text-slate-500">Total Patients</p>
+          <p id="statTotalPatients" class="mt-1 text-2xl font-bold text-slate-900">—</p>
+        </div>
+        <div class="rounded-2xl border border-slate-200 bg-white p-4">
+          <p class="text-xs font-medium text-slate-500">Visits Today</p>
+          <p id="statVisitsToday" class="mt-1 text-2xl font-bold text-teal-600">—</p>
+        </div>
+        <div class="col-span-2 sm:col-span-1 rounded-2xl border border-slate-200 bg-white p-4 flex items-center justify-between">
+          <div>
+            <p class="text-xs font-medium text-slate-500">Storage Mode</p>
+            <p class="mt-1 text-sm font-semibold text-emerald-600">Text-Only (Turso)</p>
+          </div>
+          <span class="h-2.5 w-2.5 rounded-full bg-emerald-500"></span>
+        </div>
+      </div>
+
+      <!-- Search -->
+      <div class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+        <label class="block text-xs font-semibold uppercase tracking-wide text-slate-500 mb-2">
+          Search Patient File (Name, Phone, File #, Symptoms, Tests, Medication, Comments)
+        </label>
+        <div class="flex flex-col sm:flex-row gap-2">
+          <input id="searchInput" type="search" placeholder="Search name, phone, file number, or notes..."
+            class="w-full rounded-xl border border-slate-300 px-4 py-2.5 text-sm focus:border-teal-600 focus:outline-none" />
+          <button onclick="searchPatients()"
+            class="rounded-xl bg-slate-900 px-5 py-2.5 text-sm font-semibold text-white hover:bg-slate-800 shrink-0">
+            Search
+          </button>
+        </div>
+      </div>
+
+      <!-- Patients Grid -->
+      <div>
+        <div class="mb-3 flex items-center justify-between">
+          <h2 id="listHeading" class="text-xs font-bold uppercase tracking-wide text-slate-600">Recent Patient Files</h2>
+          <button onclick="loadDashboard()" class="text-xs font-semibold text-teal-600 hover:underline">Refresh</button>
+        </div>
+        <div id="patientsList" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3"></div>
+      </div>
+    </section>
+
+    <!-- PATIENT FILE & ALL VISITS SUMMARY VIEW -->
+    <section id="patientFileView" class="hidden space-y-5">
+      <div class="flex flex-wrap items-center justify-between gap-2">
+        <button onclick="showDashboard()" class="text-sm font-semibold text-slate-600 hover:text-slate-900">
+          ← All Patients
+        </button>
+        <div class="flex flex-wrap gap-2">
+          <button onclick="toggleSummaryMode()" id="summaryModeBtn"
+            class="rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50">
+            Compact / Full Summary
+          </button>
+          <button onclick="printFullSummary()"
+            class="rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50">
+            Print All Visits
+          </button>
+          <button onclick="openEditPatientModal()"
+            class="rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50">
+            Edit Patient
+          </button>
+          <button onclick="openVisitModal()"
+            class="rounded-xl bg-teal-600 px-4 py-2 text-xs sm:text-sm font-semibold text-white hover:bg-teal-700">
+            + Add Visit
+          </button>
+        </div>
+      </div>
+
+      <!-- Patient Biodata & Alerts -->
+      <div id="patientHeaderCard" class="rounded-2xl border border-slate-200 bg-white p-4 sm:p-5 shadow-sm"></div>
+
+      <!-- Complete Visits Summary List -->
+      <div class="space-y-3">
+        <div class="flex items-center justify-between">
+          <h3 id="visitsHeading" class="text-xs font-bold uppercase tracking-wide text-slate-600">All Visits Summary</h3>
+        </div>
+        <div id="visitsTimeline" class="space-y-4"></div>
+      </div>
+    </section>
+  </main>
+
+  <!-- MODAL 1: NEW / EDIT PATIENT -->
+  <div id="patientModal" class="fixed inset-0 z-40 hidden items-center justify-center bg-slate-900/60 p-3 sm:p-4 overflow-y-auto">
+    <div class="w-full max-w-xl rounded-2xl bg-white p-5 sm:p-6 shadow-xl my-6">
+      <div class="flex items-center justify-between border-b border-slate-100 pb-3 mb-4">
+        <h3 id="patientModalTitle" class="text-lg font-bold text-slate-900">New Patient File</h3>
+        <button onclick="closeModal('patientModal')" class="text-slate-400 hover:text-slate-700 text-2xl leading-none">&times;</button>
+      </div>
+
+      <form id="patientForm" class="space-y-3.5">
+        <input type="hidden" id="editPatientId" />
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div>
+            <label class="block text-xs font-semibold text-slate-600 mb-1">Full Name *</label>
+            <input id="pFullName" type="text" required placeholder="Patient full name"
+              class="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm focus:border-teal-600 focus:outline-none" />
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-slate-600 mb-1">File Number (Auto if blank)</label>
+            <input id="pFileNumber" type="text" placeholder="e.g. PT-101"
+              class="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm focus:border-teal-600 focus:outline-none" />
+          </div>
+        </div>
+
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <div>
+            <label class="block text-xs font-semibold text-slate-600 mb-1">Phone</label>
+            <input id="pPhone" type="tel" placeholder="Phone number"
+              class="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm focus:border-teal-600 focus:outline-none" />
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-slate-600 mb-1">Age / DOB</label>
+            <input id="pAge" type="text" placeholder="e.g. 29 yrs"
+              class="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm focus:border-teal-600 focus:outline-none" />
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-slate-600 mb-1">Sex</label>
+            <select id="pSex" class="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm focus:border-teal-600 focus:outline-none">
+              <option value="">Select</option>
+              <option value="Female">Female</option>
+              <option value="Male">Male</option>
+              <option value="Other">Other</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div>
+            <label class="block text-xs font-semibold text-rose-700 mb-1">Allergies</label>
+            <input id="pAllergies" type="text" placeholder="Drug or food allergies"
+              class="w-full rounded-xl border border-rose-200 bg-rose-50/40 px-3 py-2 text-sm focus:border-rose-500 focus:outline-none" />
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-amber-700 mb-1">Chronic Conditions</label>
+            <input id="pChronic" type="text" placeholder="e.g. Diabetes, Hypertension"
+              class="w-full rounded-xl border border-amber-200 bg-amber-50/40 px-3 py-2 text-sm focus:border-amber-500 focus:outline-none" />
+          </div>
+        </div>
+
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <div>
+            <label class="block text-xs font-semibold text-slate-600 mb-1">Blood Group</label>
+            <input id="pBlood" type="text" placeholder="e.g. O+"
+              class="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm focus:border-teal-600 focus:outline-none" />
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-slate-600 mb-1">Residence</label>
+            <input id="pResidence" type="text" placeholder="Area / Town"
+              class="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm focus:border-teal-600 focus:outline-none" />
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-slate-600 mb-1">Next of Kin</label>
+            <input id="pKin" type="text" placeholder="Name & contact"
+              class="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm focus:border-teal-600 focus:outline-none" />
+          </div>
+        </div>
+
+        <div class="flex justify-end gap-2 pt-3 border-t border-slate-100">
+          <button type="button" onclick="closeModal('patientModal')"
+            class="rounded-xl border border-slate-300 px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50">Cancel</button>
+          <button id="savePatientBtn" type="submit"
+            class="rounded-xl bg-teal-600 px-5 py-2 text-sm font-semibold text-white hover:bg-teal-700">Save</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- MODAL 2: ADD / EDIT VISIT RECORD (ALL TEXT) -->
+  <div id="visitModal" class="fixed inset-0 z-40 hidden items-start justify-center bg-slate-900/60 p-3 sm:p-5 overflow-y-auto">
+    <div class="w-full max-w-2xl rounded-2xl bg-white p-5 sm:p-6 shadow-xl my-4">
+      <div class="flex items-center justify-between border-b border-slate-100 pb-3 mb-4">
+        <div>
+          <h3 id="visitModalTitle" class="text-lg font-bold text-slate-900">Record Visit Details</h3>
+          <p id="visitPatientSubtitle" class="text-xs text-slate-500"></p>
+        </div>
+        <button onclick="closeModal('visitModal')" class="text-slate-400 hover:text-slate-700 text-2xl leading-none">&times;</button>
+      </div>
+
+      <form id="visitForm" class="space-y-4">
+        <input type="hidden" id="editVisitId" />
+
+        <!-- Vitals: BP, Temp, Pulse, Weight, SpO2 -->
+        <div class="rounded-xl bg-slate-50 p-3 border border-slate-200">
+          <p class="text-xs font-bold uppercase tracking-wide text-slate-500 mb-2">Vitals (BP, Temp, Pulse, Weight, SpO2)</p>
+          <div class="grid grid-cols-2 sm:grid-cols-5 gap-2">
+            <div>
+              <label class="block text-[10px] font-semibold text-slate-500 mb-0.5">BP</label>
+              <input id="vBp" type="text" placeholder="120/80 mmHg" class="w-full rounded-lg border border-slate-300 bg-white px-2.5 py-2 text-xs" />
+            </div>
+            <div>
+              <label class="block text-[10px] font-semibold text-slate-500 mb-0.5">Temp</label>
+              <input id="vTemp" type="text" placeholder="36.7 °C" class="w-full rounded-lg border border-slate-300 bg-white px-2.5 py-2 text-xs" />
+            </div>
+            <div>
+              <label class="block text-[10px] font-semibold text-slate-500 mb-0.5">Pulse</label>
+              <input id="vPulse" type="text" placeholder="74 bpm" class="w-full rounded-lg border border-slate-300 bg-white px-2.5 py-2 text-xs" />
+            </div>
+            <div>
+              <label class="block text-[10px] font-semibold text-slate-500 mb-0.5">Weight</label>
+              <input id="vWeight" type="text" placeholder="70 kg" class="w-full rounded-lg border border-slate-300 bg-white px-2.5 py-2 text-xs" />
+            </div>
+            <div>
+              <label class="block text-[10px] font-semibold text-slate-500 mb-0.5">SpO2</label>
+              <input id="vSpo2" type="text" placeholder="98%" class="w-full rounded-lg border border-slate-300 bg-white px-2.5 py-2 text-xs" />
+            </div>
+          </div>
+        </div>
+
+        <!-- Symptoms -->
+        <div>
+          <label class="block text-xs font-semibold text-slate-700 mb-1">Symptoms</label>
+          <textarea id="vSymptoms" rows="2" placeholder="Enter patient symptoms and complaints..."
+            class="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm focus:border-teal-600 focus:outline-none"></textarea>
+        </div>
+
+        <!-- Findings / Tests Done and Their Results -->
+        <div>
+          <label class="block text-xs font-semibold text-slate-700 mb-1">Findings / Tests Done and Their Results</label>
+          <textarea id="vFindingsTests" rows="3" placeholder="Examination findings, tests ordered/done, and test results (e.g. Malaria RDT: Negative, FBC: Hb 13.4 g/dL, Urinalysis: Normal)..."
+            class="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm focus:border-teal-600 focus:outline-none"></textarea>
+        </div>
+
+        <!-- Diagnosis & Medication Given -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div>
+            <label class="block text-xs font-semibold text-slate-700 mb-1">Diagnosis</label>
+            <input id="vDiagnosis" type="text" placeholder="Working or final diagnosis"
+              class="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm focus:border-teal-600 focus:outline-none" />
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-slate-700 mb-1">Follow-up Note</label>
+            <input id="vFollowUp" type="text" placeholder="Return advice / review note"
+              class="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm focus:border-teal-600 focus:outline-none" />
+          </div>
+        </div>
+
+        <div>
+          <label class="block text-xs font-semibold text-slate-700 mb-1">Medication Given</label>
+          <textarea id="vMedication" rows="3" placeholder="Drug names, dosage, frequency, duration..."
+            class="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm font-mono focus:border-teal-600 focus:outline-none"></textarea>
+        </div>
+
+        <!-- Doctor's Comments or Lab Says -->
+        <div>
+          <label class="block text-xs font-semibold text-slate-700 mb-1">Doctor's Comments / Lab Says</label>
+          <textarea id="vComments" rows="2" placeholder="Doctor's clinical comments or what the lab says..."
+            class="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm focus:border-teal-600 focus:outline-none"></textarea>
+        </div>
+
+        <!-- Billing -->
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 rounded-xl bg-slate-50 p-3 border border-slate-200">
+          <div>
+            <label class="block text-[11px] font-semibold text-slate-500 mb-1">Amount Charged</label>
+            <input id="vCharged" type="number" step="0.01" placeholder="0" class="w-full rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-sm" />
+          </div>
+          <div>
+            <label class="block text-[11px] font-semibold text-slate-500 mb-1">Amount Paid</label>
+            <input id="vPaid" type="number" step="0.01" placeholder="0" class="w-full rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-sm" />
+          </div>
+          <div>
+            <label class="block text-[11px] font-semibold text-slate-500 mb-1">Payment Mode</label>
+            <select id="vPayMode" class="w-full rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-sm">
+              <option value="Cash">Cash</option>
+              <option value="M-Pesa">M-Pesa</option>
+              <option value="Card / Bank">Card / Bank</option>
+              <option value="Insurance">Insurance</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="flex justify-end gap-2 pt-3 border-t border-slate-100">
+          <button type="button" onclick="closeModal('visitModal')"
+            class="rounded-xl border border-slate-300 px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50">Cancel</button>
+          <button id="saveVisitBtn" type="submit"
+            class="rounded-xl bg-teal-600 px-5 py-2 text-sm font-semibold text-white hover:bg-teal-700">Save Visit</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Print Area -->
+  <div id="printArea" class="hidden"></div>
+
+  <script>
+    // Set your backend URL here: 'http://localhost:3000' for local testing, or your Vercel URL for production
+    const BACKEND_URL = 'http://localhost:3000';
+
+    const API_BASE = BACKEND_URL.replace(/\/$/, '');
+    let CLINIC_PIN = sessionStorage.getItem('clinic_pin') || '';
+    let currentPatient = null;
+    let currentVisits = [];
+    let compactMode = false;
+
+    function showToast(msg, isError = false) {
+      const el = document.getElementById('toast');
+      el.textContent = msg;
+      el.className = `fixed bottom-4 right-4 z-50 max-w-sm rounded-xl px-4 py-3 text-sm font-medium text-white shadow-lg ${isError ? 'bg-rose-600' : 'bg-slate-900'}`;
+      el.classList.remove('hidden');
+      setTimeout(() => el.classList.add('hidden'), 3500);
+    }
+
+    async function apiFetch(path, options = {}) {
+      const res = await fetch(`${API_BASE}${path}`, {
+        ...options,
+        headers: {
+          'Content-Type': 'application/json',
+          'x-clinic-pin': CLINIC_PIN,
+          ...(options.headers || {})
+        }
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Request failed');
+      return data;
+    }
+
+    document.getElementById('authForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const btn = document.getElementById('unlockBtn');
+      const pin = document.getElementById('pinInput').value.trim();
+
+      btn.disabled = true;
+      btn.textContent = 'Checking...';
+      try {
+        CLINIC_PIN = pin;
+        await apiFetch('/api/auth', { method: 'POST', body: JSON.stringify({ pin }) });
+        sessionStorage.setItem('clinic_pin', CLINIC_PIN);
+        document.getElementById('authScreen').classList.add('hidden');
+        loadDashboard();
+      } catch (err) {
+        showToast(err.message, true);
+      } finally {
+        btn.disabled = false;
+        btn.textContent = 'Open Records';
+      }
+    });
+
+    function lockApp() {
+      sessionStorage.removeItem('clinic_pin');
+      CLINIC_PIN = '';
+      document.getElementById('pinInput').value = '';
+      document.getElementById('authScreen').classList.remove('hidden');
+    }
+
+    async function loadDashboard() {
+      showDashboard();
+      try {
+        const data = await apiFetch('/api/dashboard');
+        document.getElementById('statTotalPatients').textContent = data.totalPatients;
+        document.getElementById('statVisitsToday').textContent = data.visitsToday;
+        document.getElementById('listHeading').textContent = 'Recent Patient Files';
+        renderPatientsList(data.recentPatients);
+      } catch (err) {
+        showToast(err.message, true);
+      }
+    }
+
+    let searchTimer;
+    document.getElementById('searchInput').addEventListener('input', () => {
+      clearTimeout(searchTimer);
+      searchTimer = setTimeout(searchPatients, 300);
+    });
+
+    async function searchPatients() {
+      const q = document.getElementById('searchInput').value.trim();
+      try {
+        const list = await apiFetch(`/api/patients?q=${encodeURIComponent(q)}`);
+        document.getElementById('listHeading').textContent = q ? `Search Results (${list.length})` : 'Recent Patient Files';
+        renderPatientsList(list);
+      } catch (err) {
+        showToast(err.message, true);
+      }
+    }
+
+    function renderPatientsList(patients) {
+      const container = document.getElementById('patientsList');
+      if (!patients.length) {
+        container.innerHTML = `<div class="col-span-full rounded-2xl border border-dashed border-slate-300 bg-white p-8 text-center text-sm text-slate-500">No patient records found. Click <strong>+ New Patient</strong> to start.</div>`;
+        return;
+      }
+
+      container.innerHTML = patients.map(p => `
+        <div onclick="openPatientFile(${p.id})"
+          class="cursor-pointer rounded-2xl border border-slate-200 bg-white p-4 shadow-sm hover:border-teal-500 transition">
+          <div class="flex items-start justify-between gap-2">
+            <div>
+              <span class="inline-block rounded bg-slate-100 px-2 py-0.5 font-mono text-[11px] font-semibold text-slate-700">${escapeHtml(p.file_number)}</span>
+              <h3 class="mt-1 text-base font-bold text-slate-900">${escapeHtml(p.full_name)}</h3>
+            </div>
+            <span class="rounded-full bg-teal-50 px-2.5 py-1 text-xs font-semibold text-teal-700">${p.visit_count || 0} visits</span>
+          </div>
+          <p class="mt-1 text-xs text-slate-500">
+            ${escapeHtml(p.sex || '—')} • ${escapeHtml(p.age || 'Age N/A')} • ${escapeHtml(p.phone || 'No phone')}
+          </p>
+          ${p.allergies ? `<p class="mt-2 rounded-lg bg-rose-50 px-2.5 py-1 text-[11px] font-semibold text-rose-700">Allergies: ${escapeHtml(p.allergies)}</p>` : ''}
+        </div>
+      `).join('');
+    }
+
+    function showDashboard() {
+      document.getElementById('patientFileView').classList.add('hidden');
+      document.getElementById('dashboardView').classList.remove('hidden');
+    }
+
+    async function openPatientFile(id) {
+      try {
+        const data = await apiFetch(`/api/patients/${id}`);
+        currentPatient = data.patient;
+        currentVisits = data.visits;
+
+        document.getElementById('dashboardView').classList.add('hidden');
+        document.getElementById('patientFileView').classList.remove('hidden');
+
+        renderPatientHeader();
+        renderAllVisitsSummary();
+      } catch (err) {
+        showToast(err.message, true);
+      }
+    }
+
+    function toggleSummaryMode() {
+      compactMode = !compactMode;
+      document.getElementById('summaryModeBtn').textContent = compactMode ? 'Show Full Summary' : 'Compact View';
+      renderAllVisitsSummary();
+    }
+
+    function renderPatientHeader() {
+      const p = currentPatient;
+      document.getElementById('patientHeaderCard').innerHTML = `
+        <div class="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <div class="flex flex-wrap items-center gap-2">
+              <span class="rounded-lg bg-slate-900 px-2.5 py-1 font-mono text-xs font-bold text-white">${escapeHtml(p.file_number)}</span>
+              ${p.blood_group ? `<span class="rounded-lg bg-rose-100 px-2.5 py-1 text-xs font-bold text-rose-800">Blood: ${escapeHtml(p.blood_group)}</span>` : ''}
+              <span class="rounded-lg bg-teal-100 px-2.5 py-1 text-xs font-bold text-teal-800">Total Visits: ${currentVisits.length}</span>
+            </div>
+            <h2 class="mt-2 text-xl sm:text-2xl font-bold text-slate-900">${escapeHtml(p.full_name)}</h2>
+            <p class="mt-1 text-xs sm:text-sm text-slate-600">
+              ${escapeHtml(p.sex || 'Sex N/A')} • ${escapeHtml(p.age || 'Age N/A')} • Phone: <strong>${escapeHtml(p.phone || 'N/A')}</strong>
+              ${p.residence ? ` • Residence: ${escapeHtml(p.residence)}` : ''}
+              ${p.next_of_kin ? ` • Next of Kin: ${escapeHtml(p.next_of_kin)}` : ''}
+            </p>
+          </div>
+        </div>
+
+        <div class="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+          <div class="rounded-xl border ${p.allergies ? 'border-rose-300 bg-rose-50 text-rose-900' : 'border-slate-200 bg-slate-50 text-slate-600'} px-3.5 py-2 text-xs">
+            <span class="font-bold uppercase">Allergies:</span> ${escapeHtml(p.allergies || 'None')}
+          </div>
+          <div class="rounded-xl border ${p.chronic_conditions ? 'border-amber-300 bg-amber-50 text-amber-900' : 'border-slate-200 bg-slate-50 text-slate-600'} px-3.5 py-2 text-xs">
+            <span class="font-bold uppercase">Chronic Conditions:</span> ${escapeHtml(p.chronic_conditions || 'None')}
+          </div>
+        </div>
+      `;
+    }
+
+    function renderAllVisitsSummary() {
+      const container = document.getElementById('visitsTimeline');
+      document.getElementById('visitsHeading').textContent = `All Visits Summary (${currentVisits.length} ${currentVisits.length === 1 ? 'Visit' : 'Visits'})`;
+
+      if (!currentVisits.length) {
+        container.innerHTML = `<div class="rounded-2xl border border-dashed border-slate-300 bg-white p-8 text-center text-sm text-slate-500">No visits recorded yet. Click <strong>+ Add Visit</strong> to record a consultation.</div>`;
+        return;
+      }
+
+      container.innerHTML = currentVisits.map((v, idx) => {
+        const visitNumber = currentVisits.length - idx;
+        const balance = Number(v.amount_charged || 0) - Number(v.amount_paid || 0);
+
+        return `
+          <article class="rounded-2xl border border-slate-200 bg-white p-4 sm:p-5 shadow-sm space-y-3.5">
+            <div class="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 pb-2.5">
+              <div>
+                <span class="rounded bg-teal-50 px-2 py-0.5 text-xs font-bold text-teal-800">Visit #${visitNumber}</span>
+                <span class="ml-2 text-xs font-semibold text-slate-500">${formatDate(v.visit_date)}</span>
+                ${v.diagnosis ? `<h4 class="mt-1 text-base font-bold text-slate-900">Diagnosis: ${escapeHtml(v.diagnosis)}</h4>` : ''}
+              </div>
+              <button onclick="openEditVisitModal(${idx})"
+                class="rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50">
+                Edit Visit
+              </button>
+            </div>
+
+            <!-- Vitals: BP, Temp, Pulse, Weight, SpO2 -->
+            <div class="flex flex-wrap gap-1.5 text-xs">
+              <span class="rounded-lg bg-slate-100 px-2.5 py-1">BP: <strong>${escapeHtml(v.vitals_bp || '—')}</strong></span>
+              <span class="rounded-lg bg-slate-100 px-2.5 py-1">Temp: <strong>${escapeHtml(v.vitals_temp || '—')}</strong></span>
+              <span class="rounded-lg bg-slate-100 px-2.5 py-1">Pulse: <strong>${escapeHtml(v.vitals_pulse || '—')}</strong></span>
+              <span class="rounded-lg bg-slate-100 px-2.5 py-1">Weight: <strong>${escapeHtml(v.vitals_weight || '—')}</strong></span>
+              <span class="rounded-lg bg-slate-100 px-2.5 py-1">SpO2: <strong>${escapeHtml(v.vitals_spo2 || '—')}</strong></span>
+            </div>
+
+            <!-- Summary Fields -->
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
+              <div class="rounded-xl bg-slate-50 p-3 border border-slate-100">
+                <p class="text-[11px] font-bold uppercase tracking-wide text-slate-500">Symptoms</p>
+                <p class="mt-1 whitespace-pre-line text-slate-800">${escapeHtml(v.symptoms || 'None recorded')}</p>
+              </div>
+
+              <div class="rounded-xl bg-slate-50 p-3 border border-slate-100">
+                <p class="text-[11px] font-bold uppercase tracking-wide text-slate-500">Findings / Tests Done & Results</p>
+                <p class="mt-1 whitespace-pre-line text-slate-800">${escapeHtml(v.findings_tests_results || 'None recorded')}</p>
+              </div>
+            </div>
+
+            ${!compactMode ? `
+              <div class="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
+                <div class="rounded-xl bg-teal-50/60 p-3 border border-teal-100">
+                  <p class="text-[11px] font-bold uppercase tracking-wide text-teal-800">Medication Given</p>
+                  <pre class="mt-1 whitespace-pre-wrap font-mono text-xs sm:text-sm text-slate-900">${escapeHtml(v.medication_given || 'None recorded')}</pre>
+                </div>
+
+                <div class="rounded-xl bg-amber-50/60 p-3 border border-amber-100">
+                  <p class="text-[11px] font-bold uppercase tracking-wide text-amber-800">Doctor's Comments / Lab Says</p>
+                  <p class="mt-1 whitespace-pre-line text-slate-800">${escapeHtml(v.doctor_lab_comments || 'None recorded')}</p>
+                </div>
+              </div>
+            ` : `
+              <div class="text-xs sm:text-sm space-y-1">
+                <p><strong>Medication Given:</strong> <span class="font-mono">${escapeHtml(v.medication_given || 'None')}</span></p>
+                <p><strong>Doctor's Comments / Lab Says:</strong> ${escapeHtml(v.doctor_lab_comments || 'None')}</p>
+              </div>
+            `}
+
+            ${v.follow_up_note ? `<p class="text-xs font-semibold text-indigo-700">Follow-up: ${escapeHtml(v.follow_up_note)}</p>` : ''}
+
+            ${(Number(v.amount_charged) > 0 || Number(v.amount_paid) > 0) ? `
+              <div class="flex flex-wrap items-center justify-between gap-2 border-t border-slate-100 pt-2 text-xs text-slate-500">
+                <span>Charged: <strong>${v.amount_charged}</strong> • Paid: <strong>${v.amount_paid}</strong> (${escapeHtml(v.payment_mode || 'Cash')})</span>
+                <span class="${balance > 0 ? 'font-bold text-rose-600' : 'font-semibold text-emerald-600'}">
+                  ${balance > 0 ? `Balance: ${balance}` : 'Paid'}
+                </span>
+              </div>
+            ` : ''}
+          </article>
+        `;
+      }).join('');
+    }
+
+    // Patient Modal
+    function openPatientModal() {
+      document.getElementById('patientModalTitle').textContent = 'New Patient File';
+      document.getElementById('editPatientId').value = '';
+      document.getElementById('patientForm').reset();
+      openModal('patientModal');
+    }
+
+    function openEditPatientModal() {
+      if (!currentPatient) return;
+      document.getElementById('patientModalTitle').textContent = 'Edit Patient File';
+      document.getElementById('editPatientId').value = currentPatient.id;
+      document.getElementById('pFullName').value = currentPatient.full_name || '';
+      document.getElementById('pFileNumber').value = currentPatient.file_number || '';
+      document.getElementById('pPhone').value = currentPatient.phone || '';
+      document.getElementById('pAge').value = currentPatient.age || '';
+      document.getElementById('pSex').value = currentPatient.sex || '';
+      document.getElementById('pAllergies').value = currentPatient.allergies || '';
+      document.getElementById('pChronic').value = currentPatient.chronic_conditions || '';
+      document.getElementById('pBlood').value = currentPatient.blood_group || '';
+      document.getElementById('pResidence').value = currentPatient.residence || '';
+      document.getElementById('pKin').value = currentPatient.next_of_kin || '';
+      openModal('patientModal');
+    }
+
+    document.getElementById('patientForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const btn = document.getElementById('savePatientBtn');
+      const editId = document.getElementById('editPatientId').value;
+      const payload = {
+        full_name: document.getElementById('pFullName').value,
+        file_number: document.getElementById('pFileNumber').value,
+        phone: document.getElementById('pPhone').value,
+        age: document.getElementById('pAge').value,
+        sex: document.getElementById('pSex').value,
+        allergies: document.getElementById('pAllergies').value,
+        chronic_conditions: document.getElementById('pChronic').value,
+        blood_group: document.getElementById('pBlood').value,
+        residence: document.getElementById('pResidence').value,
+        next_of_kin: document.getElementById('pKin').value
+      };
+
+      btn.disabled = true;
+      btn.textContent = 'Saving...';
+      try {
+        if (editId) {
+          await apiFetch(`/api/patients/${editId}`, { method: 'PUT', body: JSON.stringify(payload) });
+          closeModal('patientModal');
+          showToast('Patient updated.');
+          openPatientFile(editId);
+        } else {
+          const created = await apiFetch('/api/patients', { method: 'POST', body: JSON.stringify(payload) });
+          closeModal('patientModal');
+          showToast('Patient file created.');
+          openPatientFile(created.id);
+        }
+      } catch (err) {
+        showToast(err.message, true);
+      } finally {
+        btn.disabled = false;
+        btn.textContent = 'Save';
+      }
+    });
+
+    // Visit Modal (New & Edit)
+    function openVisitModal() {
+      if (!currentPatient) return;
+      document.getElementById('visitModalTitle').textContent = 'Record New Visit';
+      document.getElementById('editVisitId').value = '';
+      document.getElementById('visitForm').reset();
+      document.getElementById('visitPatientSubtitle').textContent = `${currentPatient.full_name} (${currentPatient.file_number})`;
+      openModal('visitModal');
+    }
+
+    function openEditVisitModal(index) {
+      const v = currentVisits[index];
+      if (!v || !currentPatient) return;
+      document.getElementById('visitModalTitle').textContent = 'Edit Visit Record';
+      document.getElementById('editVisitId').value = v.id;
+      document.getElementById('visitPatientSubtitle').textContent = `${currentPatient.full_name} • ${formatDate(v.visit_date)}`;
+
+      document.getElementById('vBp').value = v.vitals_bp || '';
+      document.getElementById('vTemp').value = v.vitals_temp || '';
+      document.getElementById('vPulse').value = v.vitals_pulse || '';
+      document.getElementById('vWeight').value = v.vitals_weight || '';
+      document.getElementById('vSpo2').value = v.vitals_spo2 || '';
+      document.getElementById('vSymptoms').value = v.symptoms || '';
+      document.getElementById('vFindingsTests').value = v.findings_tests_results || '';
+      document.getElementById('vDiagnosis').value = v.diagnosis || '';
+      document.getElementById('vFollowUp').value = v.follow_up_note || '';
+      document.getElementById('vMedication').value = v.medication_given || '';
+      document.getElementById('vComments').value = v.doctor_lab_comments || '';
+      document.getElementById('vCharged').value = v.amount_charged || '';
+      document.getElementById('vPaid').value = v.amount_paid || '';
+      document.getElementById('vPayMode').value = v.payment_mode || 'Cash';
+
+      openModal('visitModal');
+    }
+
+    document.getElementById('visitForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const btn = document.getElementById('saveVisitBtn');
+      const editVisitId = document.getElementById('editVisitId').value;
+      btn.disabled = true;
+      btn.textContent = 'Saving...';
+
+      const payload = {
+        patient_id: currentPatient.id,
+        vitals_bp: document.getElementById('vBp').value,
+        vitals_temp: document.getElementById('vTemp').value,
+        vitals_pulse: document.getElementById('vPulse').value,
+        vitals_weight: document.getElementById('vWeight').value,
+        vitals_spo2: document.getElementById('vSpo2').value,
+        symptoms: document.getElementById('vSymptoms').value,
+        findings_tests_results: document.getElementById('vFindingsTests').value,
+        diagnosis: document.getElementById('vDiagnosis').value,
+        follow_up_note: document.getElementById('vFollowUp').value,
+        medication_given: document.getElementById('vMedication').value,
+        doctor_lab_comments: document.getElementById('vComments').value,
+        amount_charged: document.getElementById('vCharged').value,
+        amount_paid: document.getElementById('vPaid').value,
+        payment_mode: document.getElementById('vPayMode').value
+      };
+
+      try {
+        if (editVisitId) {
+          await apiFetch(`/api/visits/${editVisitId}`, { method: 'PUT', body: JSON.stringify(payload) });
+          showToast('Visit updated.');
+        } else {
+          await apiFetch(`/api/patients/${currentPatient.id}/visits`, { method: 'POST', body: JSON.stringify(payload) });
+          showToast('Visit saved.');
+        }
+        closeModal('visitModal');
+        openPatientFile(currentPatient.id);
+      } catch (err) {
+        showToast(err.message, true);
+      } finally {
+        btn.disabled = false;
+        btn.textContent = 'Save Visit';
+      }
+    });
+
+    // Print Complete Patient Summary Across All Visits
+    function printFullSummary() {
+      if (!currentPatient) return;
+      const p = currentPatient;
+      const printArea = document.getElementById('printArea');
+      printArea.classList.remove('hidden');
+
+      const visitsHtml = currentVisits.map((v, idx) => {
+        const visitNumber = currentVisits.length - idx;
+        return `
+          <div style="border:1px solid #cbd5e1; padding:12px; margin-bottom:12px; border-radius:6px;">
+            <p style="margin:0 0 6px 0;"><strong>Visit #${visitNumber}</strong> — ${formatDate(v.visit_date)} ${v.diagnosis ? `| <strong>Diagnosis:</strong> ${escapeHtml(v.diagnosis)}` : ''}</p>
+            <p style="margin:4px 0; font-size:13px;"><strong>Vitals:</strong> BP: ${escapeHtml(v.vitals_bp || '—')} | Temp: ${escapeHtml(v.vitals_temp || '—')} | Pulse: ${escapeHtml(v.vitals_pulse || '—')} | Weight: ${escapeHtml(v.vitals_weight || '—')} | SpO2: ${escapeHtml(v.vitals_spo2 || '—')}</p>
+            <p style="margin:4px 0; font-size:13px;"><strong>Symptoms:</strong> ${escapeHtml(v.symptoms || '—')}</p>
+            <p style="margin:4px 0; font-size:13px;"><strong>Findings / Tests Done & Results:</strong> ${escapeHtml(v.findings_tests_results || '—')}</p>
+            <p style="margin:4px 0; font-size:13px;"><strong>Medication Given:</strong> ${escapeHtml(v.medication_given || '—')}</p>
+            <p style="margin:4px 0; font-size:13px;"><strong>Doctor's Comments / Lab Says:</strong> ${escapeHtml(v.doctor_lab_comments || '—')}</p>
+            ${v.follow_up_note ? `<p style="margin:4px 0; font-size:13px;"><strong>Follow-up:</strong> ${escapeHtml(v.follow_up_note)}</p>` : ''}
+          </div>
+        `;
+      }).join('');
+
+      printArea.innerHTML = `
+        <div style="font-family: sans-serif; max-width: 800px; margin: auto;">
+          <h2 style="margin:0;">PATIENT RECORD SUMMARY</h2>
+          <p style="margin:4px 0;"><strong>Name:</strong> ${escapeHtml(p.full_name)} | <strong>File #:</strong> ${escapeHtml(p.file_number)} | <strong>Age/Sex:</strong> ${escapeHtml(p.age || '—')} / ${escapeHtml(p.sex || '—')} | <strong>Phone:</strong> ${escapeHtml(p.phone || '—')}</p>
+          <p style="margin:4px 0;"><strong>Allergies:</strong> ${escapeHtml(p.allergies || 'None')} | <strong>Chronic:</strong> ${escapeHtml(p.chronic_conditions || 'None')}</p>
+          <hr style="margin:12px 0;" />
+          ${visitsHtml || '<p>No visits recorded.</p>'}
+        </div>
+      `;
+
+      window.print();
+      printArea.classList.add('hidden');
+    }
+
+    function openModal(id) {
+      const m = document.getElementById(id);
+      m.classList.remove('hidden');
+      m.classList.add('flex');
+    }
+
+    function closeModal(id) {
+      const m = document.getElementById(id);
+      m.classList.add('hidden');
+      m.classList.remove('flex');
+    }
+
+    function escapeHtml(str) {
+      return String(str || '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
+    }
+
+    function formatDate(dt) {
+      if (!dt) return '';
+      const d = new Date(dt.replace(' ', 'T') + 'Z');
+      return isNaN(d) ? dt : d.toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' });
+    }
+  </script>
+</body>
+</html>
