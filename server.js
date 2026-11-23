@@ -3,6 +3,7 @@ const cors = require('cors');
 const { createClient } = require('@libsql/client');
 
 const app = express();
+const router = express.Router();
 
 app.use(cors({
   origin: '*',
@@ -67,7 +68,6 @@ async function ensureSchema() {
     `CREATE INDEX IF NOT EXISTS idx_visits_patient ON visits(patient_id)`
   ], 'write');
 
-  // Self-heal if an older visits table already exists in Turso without findings_tests_results
   const info = await db.execute(`PRAGMA table_info(visits)`);
   const existingCols = new Set(info.rows.map(row => row.name));
 
@@ -96,7 +96,7 @@ async function ensureSchema() {
 }
 
 function checkPin(req, res, next) {
-  if (req.path === '/' || req.path === '/api/health' || req.path === '/api/auth') {
+  if (req.path === '/' || req.path === '/health' || req.path === '/auth') {
     return next();
   }
   const pin = req.headers['x-clinic-pin'];
@@ -106,9 +106,9 @@ function checkPin(req, res, next) {
   next();
 }
 
-app.use(checkPin);
+router.use(checkPin);
 
-app.get(['/', '/api/health'], async (req, res) => {
+router.get(['/', '/health'], async (req, res) => {
   try {
     await ensureSchema();
     res.json({ status: 'ok', service: 'Clinic Text Records API', database: 'Turso Connected' });
@@ -117,10 +117,10 @@ app.get(['/', '/api/health'], async (req, res) => {
   }
 });
 
-app.post('/api/auth', async (req, res) => {
+router.post('/auth', async (req, res) => {
   try {
     await ensureSchema();
-    const { pin } = req.body;
+    const { pin } = req.body || {};
     if (String(pin) === String(CLINIC_PIN)) {
       return res.json({ authenticated: true });
     }
@@ -130,7 +130,7 @@ app.post('/api/auth', async (req, res) => {
   }
 });
 
-app.get('/api/dashboard', async (req, res) => {
+router.get('/dashboard', async (req, res) => {
   try {
     await ensureSchema();
     const [patientsCount, visitsToday, recentPatients] = await Promise.all([
@@ -156,7 +156,7 @@ app.get('/api/dashboard', async (req, res) => {
   }
 });
 
-app.get('/api/patients', async (req, res) => {
+router.get('/patients', async (req, res) => {
   try {
     await ensureSchema();
     const q = (req.query.q || '').trim();
@@ -201,7 +201,7 @@ app.get('/api/patients', async (req, res) => {
   }
 });
 
-app.post('/api/patients', async (req, res) => {
+router.post('/patients', async (req, res) => {
   try {
     await ensureSchema();
     const {
@@ -257,7 +257,7 @@ app.post('/api/patients', async (req, res) => {
   }
 });
 
-app.put('/api/patients/:id', async (req, res) => {
+router.put('/patients/:id', async (req, res) => {
   try {
     await ensureSchema();
     const id = Number(req.params.id);
@@ -303,7 +303,7 @@ app.put('/api/patients/:id', async (req, res) => {
   }
 });
 
-app.get('/api/patients/:id', async (req, res) => {
+router.get('/patients/:id', async (req, res) => {
   try {
     await ensureSchema();
     const id = Number(req.params.id);
@@ -327,7 +327,7 @@ app.get('/api/patients/:id', async (req, res) => {
   }
 });
 
-app.post('/api/patients/:id/visits', async (req, res) => {
+router.post('/patients/:id/visits', async (req, res) => {
   try {
     await ensureSchema();
     const patientId = Number(req.params.id);
@@ -386,7 +386,7 @@ app.post('/api/patients/:id/visits', async (req, res) => {
   }
 });
 
-app.put('/api/visits/:visitId', async (req, res) => {
+router.put('/visits/:visitId', async (req, res) => {
   try {
     await ensureSchema();
     const visitId = Number(req.params.visitId);
@@ -458,6 +458,9 @@ app.put('/api/visits/:visitId', async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
+
+app.use('/api', router);
+app.use('/', router);
 
 module.exports = app;
 
